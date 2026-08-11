@@ -8,7 +8,7 @@
 using namespace std;
 
 
-commandResult executeCommand(const vector<string> & tokens) {//const to not modify the lines
+commandResult executeCommand(const vector<string> & tokens) { //const to not modify the lines
     if(tokens.empty()) {
         return {RespError("Protocol error"), false};
     }
@@ -105,7 +105,34 @@ commandResult executeCommand(const vector<string> & tokens) {//const to not modi
     }else if (cmd=="QUIT") {
         reply = RespSimpleString("BYE!");
         quit=true;
-    }else{
+    }else if(cmd == "CONFIG") {
+
+        if(args.size() != 2) {
+            reply = RespError("wrong number of arguments");
+        }
+        else if(args[0] == "GET") {
+
+            if(args[1] == "save") {
+                reply =
+                    "*2\r\n"
+                    "$4\r\nsave\r\n"
+                    "$0\r\n\r\n";
+            }
+            else if(args[1] == "appendonly") {
+                reply =
+                    "*2\r\n"
+                    "$10\r\nappendonly\r\n"
+                    "$2\r\nno\r\n";
+            }
+            else {
+                reply = "*0\r\n";
+            }
+        }
+        else {
+            reply = RespError("unsupported CONFIG");
+        }
+    }
+    else{
         reply = RespError("unknown command");
     }
     return {reply,quit};

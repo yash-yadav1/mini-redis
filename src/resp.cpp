@@ -35,6 +35,9 @@ RespResult ParseRESP(const string &message) {
         if (word_len < 0 || word_len > 512 * 1024 * 1024) return {{}, -1};//if too much length of word just return malformed data
 
         if (pos + 1 >= message.size()) return {{}, 0};
+        if (message[pos] != '\r' || message[pos + 1] != '\n'){
+            return {{}, -1};
+        }
         pos += 2;
         
         

@@ -54,9 +54,13 @@ int createServer(){
     return server_fd;
 }
 
+
+
 void sendReply(int client_fd,const string & reply){
     write(client_fd,reply.c_str(),reply.size());
 }
+
+
 
 void handleClient(int client_fd,sockaddr_in client_addr){
     char client_ip[INET_ADDRSTRLEN];
@@ -72,7 +76,6 @@ void handleClient(int client_fd,sockaddr_in client_addr){
         
         int n = read(client_fd,buffer,1024 );
         
-        // cout << "read() returned: " << n << endl;
         if(n==0) {
             cout<<"Client with ip and port number : "<<client_ip<<":"<<client_port<<" disconnected "<<endl;
             break;
@@ -82,9 +85,36 @@ void handleClient(int client_fd,sockaddr_in client_addr){
         }
         inbuf.append(buffer,n);
         while(true) {
-            
-            RespResult result = ParseRESP(inbuf);
 
+
+            if(!inbuf.empty() && inbuf[0] != '*')//if client sends direct command
+            {
+                size_t pos = inbuf.find("\r\n");
+
+                if(pos == string::npos)
+                    break;
+
+                string line = inbuf.substr(0,pos);
+
+                vector<string> tokens;
+
+                stringstream ss(line);
+
+                string word;
+
+                while(ss >> word)
+                    tokens.push_back(word);
+
+                commandResult cmd = executeCommand(tokens);
+
+                sendReply(client_fd,cmd.reply);
+
+                inbuf.erase(0,pos+2);
+
+                continue;
+            }
+            RespResult result = ParseRESP(inbuf);
+            
             if(result.bytesConsumed==-1){
                 sendReply(client_fd, RespError("Protocol error"));
                 break;

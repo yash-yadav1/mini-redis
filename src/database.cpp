@@ -2,6 +2,7 @@
 #include <shared_mutex>//for mutex lock of database
 
 #include "../include/database.h"
+#include "../include/resp.h"
 
 using namespace std;
 
@@ -96,7 +97,7 @@ bool Database::Incr(const string &key,string &reply)
 
     if(it==data.end()){
         data[key]="1";
-        reply="1\n";
+        reply = RespInteger(1); 
         return true;
     }
 
@@ -108,13 +109,13 @@ bool Database::Incr(const string &key,string &reply)
 
         it->second=to_string(value);
 
-        reply="ok new val: "+it->second+"\n";
+        reply = RespInteger(value);
 
         return true;
 
     }catch(...){
 
-        reply="ERROR value is not an integer.\n";
+        reply = RespError("value is not an integer");
 
         return false;
     }
