@@ -10,6 +10,6 @@ using namespace std;
 
 int createServer();
 
-void sendReply(int client_fd,const string &reply);
+bool sendReply(int client_fd,const string &reply);
 
 void handleClient(int client_fd,sockaddr_in client_addr);

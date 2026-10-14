@@ -105,7 +105,44 @@ commandResult executeCommand(const vector<string> & tokens) { //const to not mod
     }else if (cmd=="QUIT") {
         reply = RespSimpleString("BYE!");
         quit=true;
-    }else if(cmd == "CONFIG") {
+    }else if(cmd == "EXPIRE") {
+        if(args.size() != 2) {
+            reply = RespError("wrong number of arguments");
+        }else {
+            try {
+                int seconds = stoi(args[1]);
+
+                bool success = database.Expire(args[0], seconds);
+                reply = RespInteger(success ? 1 : 0);
+
+                if(success) {
+                    SaveDatabase();
+                }
+            }catch(...) {
+                reply = RespError("invalid expiration time");
+            }
+        }
+
+    } else if(cmd == "TTL") {
+        if(args.size() != 1) {
+            reply = RespError("wrong number of arguments");
+        }else {
+            long long seconds = database.TTL(args[0]);
+            reply = RespInteger(seconds);
+        }
+
+    } else if(cmd == "PERSIST") {
+        if(args.size() != 1) {
+            reply = RespError("wrong number of arguments");
+        }else {
+            bool success = database.Persist(args[0]);
+            reply = RespInteger(success ? 1 : 0);
+
+            if(success) {
+                SaveDatabase();
+            }
+        }
+    } else if(cmd == "CONFIG") {
 
         if(args.size() != 2) {
             reply = RespError("wrong number of arguments");

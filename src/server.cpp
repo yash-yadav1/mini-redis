@@ -3,8 +3,8 @@
 #include <netinet/in.h>//contains networking structures like sys_addr_in,address family
 #include <unistd.h>//linux system calls like read() , write(),close();
 #include <arpa/inet.h>//used for the client port no. and ip address  for INET_ntop
-#include <thread>//multipleclient handling
-
+#include <thread>//multiple client handling
+#include <cerrno>  // for MSG_NOSIGNAL in sendreply
 
 #include "../include/server.h"
 #include "../include/command.h"
@@ -56,8 +56,28 @@ int createServer(){
 
 
 
-void sendReply(int client_fd,const string & reply){
-    write(client_fd,reply.c_str(),reply.size());
+bool sendReply(int client_fd, const string &reply) {
+    size_t totalSent = 0;//size_t is used to represent the size it can't be negative 
+
+    while (totalSent < reply.size()) {
+        ssize_t bytesSent = send(client_fd,reply.data() + totalSent,reply.size() - totalSent,MSG_NOSIGNAL);
+        //riting to a disconnected socket can raise SIGPIPE   so use MSG_NOSIGNAL 
+        //ssize_t is used to represnt the bytes sent recived it is gernally positive and -1 reperesents error
+        if (bytesSent < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            return false;
+        }
+
+        if (bytesSent == 0) {
+            return false;
+        }
+
+        totalSent += static_cast<size_t>(bytesSent);
+    }
+
+    return true;
 }
 
 
@@ -89,7 +109,7 @@ void handleClient(int client_fd,sockaddr_in client_addr){
 
             if(!inbuf.empty() && inbuf[0] != '*')//if client sends direct command
             {
-                size_t pos = inbuf.find("\r\n");
+                size_t pos = inbuf.find("\n");
 
                 if(pos == string::npos)
                     break;
@@ -104,19 +124,32 @@ void handleClient(int client_fd,sockaddr_in client_addr){
 
                 while(ss >> word)
                     tokens.push_back(word);
-
+                
                 commandResult cmd = executeCommand(tokens);
 
-                sendReply(client_fd,cmd.reply);
+                // sendReply(client_fd,cmd.reply);
+                if (!sendReply(client_fd, cmd.reply)) {
+                    cerr << "Failed to send response to client " << client_ip <<" : "<< client_port <<"\n";
+                    quit=true;
+                    break;
+                }
 
-                inbuf.erase(0,pos+2);
+                inbuf.erase(0,pos+1);
+
+                if(cmd.quit){
+                    cout<<"Client with ip and port number : "<<client_ip<<":"<<client_port<<" said  bye bye! "<<endl;
+                    quit=true;
+                    break;
+                }
 
                 continue;
             }
+
             RespResult result = ParseRESP(inbuf);
             
             if(result.bytesConsumed==-1){
                 sendReply(client_fd, RespError("Protocol error"));
+                quit=true;
                 break;
             }else if(result.bytesConsumed==0){
                 break;
@@ -125,7 +158,12 @@ void handleClient(int client_fd,sockaddr_in client_addr){
                 //execution command             
                 commandResult cmd = executeCommand(result.tokens);
                 
-                sendReply(client_fd,cmd.reply);
+                if(!sendReply(client_fd,cmd.reply) ) {
+                    cerr << "Failed to send response to client " << client_ip << ":" << client_port << endl; 
+                    quit = true; 
+                    break;
+                }
+
                 inbuf.erase(0,result.bytesConsumed);
                 if(cmd.quit){
                     cout<<"Client with ip and port number : "<<client_ip<<":"<<client_port<<" said  bye bye! "<<endl;
