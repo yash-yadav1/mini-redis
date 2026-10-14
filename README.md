@@ -1,169 +1,168 @@
 # Mini Redis
 
-A Redis-inspired **in-memory key-value store and TCP server** built from scratch in **C++17** using **POSIX sockets, multithreading, RESP-style protocol parsing, thread synchronization, and file-based persistence**.
+A Redis-inspired in-memory key-value store and TCP server built from scratch in **C++17** using POSIX sockets, multithreading, RESP-style protocol parsing, thread synchronization, key expiration (TTL), and file-based persistence.
 
-The project recreates core concepts behind Redis without using external networking or database libraries, providing hands-on experience with **network programming, concurrent client handling, protocol parsing, in-memory data structures, synchronization, and persistence**.
+The project recreates core concepts behind Redis without external networking or database libraries, giving hands-on experience with network programming, concurrent client handling, protocol parsing, in-memory data structures, synchronization, and persistence.
 
----
+> 📖 See **[commands.md](commands.md)** for copy-pasteable build, run, and test commands.
 
 ## Motivation
 
-The goal of this project is to understand how an in-memory database such as Redis works internally by implementing its core components from scratch.
+The goal is to understand how an in-memory database like Redis works internally by implementing its core components from scratch:
 
-Instead of relying on networking frameworks or database libraries, the project manually implements:
+- TCP socket creation and connection handling
+- Concurrent client processing
+- Redis-style RESP request parsing
+- Command execution
+- Thread-safe shared data access
+- Key expiration (TTL) with persisted deadlines
+- File-based persistence
+- Redis-compatible responses for benchmark workloads
 
-* TCP socket creation and connection handling
-* Concurrent client processing
-* Redis-style RESP request parsing
-* Command execution
-* Thread-safe shared data access
-* File-based persistence
-* Redis-compatible responses for benchmark workloads
-
-The project was also tested using **`redis-benchmark`** to evaluate the server under concurrent workloads.
-
----
+The server was also tested with `redis-benchmark` under concurrent workloads.
 
 ## Features
 
-* 🚀 TCP server built directly using POSIX sockets
-* 🔄 Concurrent client handling using `std::thread`
-* 🔒 Thread-safe database using `std::shared_mutex`
-* ⚡ In-memory storage using `std::unordered_map`
-* 📡 RESP-style request parsing
-* 📤 RESP-formatted server responses
-* 💾 File-based persistence
-* 🔧 Redis-compatible commands required for benchmark workloads
-* 📊 Tested with `redis-benchmark`
-* 🔌 Persistent TCP connections with multiple requests per connection
-* 📝 Client IP and port logging
-* ♻️ Graceful client connection handling
-
----
+- 🚀 TCP server built directly on POSIX sockets
+- 🔄 Concurrent client handling using `std::thread`
+- 🔒 Thread-safe database using `std::shared_mutex`
+- ⚡ In-memory storage using `std::unordered_map`
+- 📡 RESP-style request parsing and RESP-formatted responses
+- ⏳ **Key expiration: `EXPIRE`, `TTL`, `PERSIST`**
+- 💾 File-based persistence, **including expiration deadlines**
+- 🔧 Redis-compatible commands required for benchmark workloads
+- 📊 Tested with `redis-benchmark`
+- 🔌 Persistent TCP connections with multiple requests per connection
+- 📝 Client IP and port logging
+- ♻️ Graceful client connection handling
 
 ## Tech Stack
 
-| Category               | Technology                  |
-| ----------------------- | ---------------------------- |
-| Language               | C++17                       |
-| Networking             | POSIX TCP Sockets           |
-| Concurrency            | `std::thread`               |
-| Synchronization        | `std::shared_mutex`         |
-| Data Structure         | `std::unordered_map`        |
-| Protocol               | RESP-style Redis protocol   |
-| Operating System       | Linux                       |
-| Persistence            | File-based storage          |
-| Build System           | Makefile                    |
-| Testing / Benchmarking | `redis-benchmark`, `netcat` |
-
----
+| Category | Technology |
+|---|---|
+| Language | C++17 |
+| Networking | POSIX TCP sockets |
+| Concurrency | `std::thread` |
+| Synchronization | `std::shared_mutex` |
+| Data structure | `std::unordered_map` |
+| Protocol | RESP-style Redis protocol |
+| OS | Linux |
+| Persistence | File-based storage |
+| Build system | Makefile |
+| Testing / benchmarking | `redis-benchmark`, `redis-cli`, `netcat` |
 
 ## Supported Commands
 
-| Command                 | Description                                  |
-| ------------------------ | --------------------------------------------- |
-| `PING`                  | Check server availability                    |
-| `SET key value`         | Store a key-value pair                       |
-| `GET key`               | Retrieve a value                             |
-| `DEL key`               | Delete a key                                 |
-| `EXISTS key`            | Check whether a key exists                   |
-| `SIZE`                  | Return the number of stored keys             |
-| `KEYS`                  | List stored keys                             |
-| `CLEAR`                 | Remove all keys                              |
-| `INCR key`              | Increment an integer value                   |
-| `QUIT`                  | Close the client connection                  |
-| `CONFIG GET save`       | Return persistence configuration information |
-| `CONFIG GET appendonly` | Return AOF compatibility information         |
+| Command | Description |
+|---|---|
+| `PING` | Check server availability |
+| `SET key value` | Store a key-value pair (clears any existing TTL) |
+| `GET key` | Retrieve a value |
+| `DEL key` | Delete a key |
+| `EXISTS key` | Check whether a key exists |
+| `SIZE` | Return the number of stored keys |
+| `KEYS` | List stored keys (no pattern support) |
+| `CLEAR` | Remove all keys |
+| `INCR key` | Increment an integer value |
+| `EXPIRE key seconds` | Set a time-to-live on a key |
+| `TTL key` | Return remaining time-to-live in seconds |
+| `PERSIST key` | Remove a key's expiration without deleting the key |
+| `QUIT` | Close the client connection |
+| `CONFIG GET save` | Return persistence configuration information |
+| `CONFIG GET appendonly` | Return AOF compatibility information |
 
-The `CONFIG` implementation is intentionally minimal and exists primarily to provide compatibility with Redis client/benchmark behavior rather than reproduce Redis's complete configuration subsystem.
+Mini Redis uses `SIZE` and `CLEAR` rather than Redis's `DBSIZE` and `FLUSHDB`. The `CONFIG` implementation is intentionally minimal and exists only for compatibility with Redis client/benchmark behavior.
 
----
+### TTL return values
+
+| Value | Meaning |
+|---|---|
+| Positive number | Seconds remaining (rounded down) |
+| `-1` | Key exists but has no expiration |
+| `-2` | Key does not exist or has expired |
+
+## Key Expiration
+
+- `EXPIRE key seconds` sets an expiration deadline for an existing key.
+- `TTL key` reports the remaining time using the values above.
+- `PERSIST key` removes the deadline and keeps the key.
+- `SET` on an existing key removes its TTL.
+- Deadlines are persisted, so the countdown continues across a server restart. A key whose deadline passed while the server was offline is treated as expired after restart.
 
 ## RESP Protocol
 
-The server uses a Redis-style **RESP (Redis Serialization Protocol)** for communication with Redis-compatible clients and benchmarking tools.
+The server uses a Redis-style RESP (Redis Serialization Protocol) for communication with Redis-compatible clients and benchmarking tools.
 
-For example, a command such as:
+A command such as:
 
-```text
+```
 SET name William
 ```
 
-is represented using RESP as:
+is encoded in RESP as:
 
-```text
+```
 *3\r\n
 $3\r\n
 SET\r\n
 $4\r\n
 name\r\n
-$6\r\n
+$7\r\n
 William\r\n
 ```
 
-The server parses the incoming request into command tokens:
-
-```text
-["SET", "name", "William"]
-```
-
-The command is then executed by the command layer and the result is serialized back into a RESP-compatible response.
-
-This separates the networking layer from command execution and database operations.
-
----
+The server parses the request into tokens (`["SET", "name", "William"]`), the command layer executes it, and the result is serialized back as a RESP response. This separates networking from command execution and database operations.
 
 ## System Architecture
 
-```text
+```
                          TCP Clients
                              |
                              v
                   +-----------------------+
-                  |     TCP Server        |
-                  | socket/bind/listen    |
+                  |      TCP Server       |
+                  |  socket/bind/listen   |
                   |       accept()        |
                   +-----------+-----------+
                               |
                               v
                   +-----------------------+
-                  |    Client Thread      |
-                  |     std::thread       |
+                  |     Client Thread     |
+                  |      std::thread      |
                   +-----------+-----------+
                               |
                               v
                   +-----------------------+
-                  |     RESP Parser       |
+                  |      RESP Parser      |
                   |      ParseRESP()      |
                   +-----------+-----------+
                               |
                               v
                   +-----------------------+
-                  |   Command Executor    |
-                  |   executeCommand()    |
+                  |    Command Executor   |
+                  |    executeCommand()   |
                   +-----------+-----------+
                               |
                     +---------+---------+
                     |                   |
                     v                   v
           +------------------+  +-------------------+
-          | In-Memory        |  | Persistence       |
-          | Database         |  | Layer             |
-          | unordered_map    |  | database.txt      |
+          |   In-Memory      |  |   Persistence     |
+          |   Database       |  |   Layer           |
+          |  unordered_map   |  |  data/database.txt|
+          |  + expirations   |  |  (D and E records)|
           +--------+---------+  +-------------------+
                    |
                    v
           +------------------+
-          | shared_mutex     |
-          | Thread Safety    |
+          |   shared_mutex   |
+          |   Thread Safety  |
           +------------------+
 ```
 
----
-
 ## Project Structure
 
-```text
+```
 MiniRedis/
 │
 ├── include/
@@ -181,133 +180,91 @@ MiniRedis/
 │   ├── resp.cpp
 │   └── server.cpp
 │
+├── data/
+│   └── database.txt      (generated at runtime)
+│
 ├── Makefile
 ├── README.md
+├── commands.md
 └── .gitignore
 ```
 
-The project is separated into modules so that networking, command execution, database management, persistence, and protocol parsing remain independent.
-
----
+Networking, command execution, database management, persistence, and protocol parsing are separated into independent modules.
 
 ## Build
-
-The project uses a `Makefile` for compilation.
-
-Build the server with:
 
 ```bash
 make
 ```
 
-This compiles the C++17 source files with pthread support.
-
-To remove generated build artifacts:
+This compiles the C++17 sources with pthread support. To remove build artifacts:
 
 ```bash
 make clean
 ```
 
----
-
 ## Run
-
-Start the server:
 
 ```bash
 ./server
 ```
 
-The server listens on the default Redis port:
+The server listens on the default Redis port, `6379`:
 
-```text
-6379
 ```
-
-Expected output:
-
-```text
 Server listening on port 6379...
 Server ready, Waiting for clients...
 ```
 
----
+## Quick Start
 
-## Testing with Netcat
-
-A raw TCP client can be used for basic connectivity testing:
+In a second terminal:
 
 ```bash
-nc localhost 6379
+redis-cli -p 6379 PING
+redis-cli -p 6379 SET session active
+redis-cli -p 6379 EXPIRE session 10
+redis-cli -p 6379 TTL session
+redis-cli -p 6379 GET session
 ```
 
-For RESP commands, requests can also be sent directly through `nc`.
+For the full set of test scenarios (INCR, EXPIRE/TTL, PERSIST, restart persistence, CLEAR, netcat, benchmarking, troubleshooting), see **[commands.md](commands.md)**.
 
-For example:
+## Testing with Netcat
 
 ```bash
 printf '*1\r\n$4\r\nPING\r\n' | nc localhost 6379
 ```
 
-Expected response:
+Expected:
 
-```text
+```
 +PONG
 ```
 
-Multiple RESP commands can be sent over the same TCP connection:
+Multiple RESP commands over the same connection:
 
 ```bash
 printf '*1\r\n$4\r\nPING\r\n*1\r\n$4\r\nPING\r\n' | nc localhost 6379
 ```
 
-Expected:
-
-```text
-+PONG
-+PONG
-```
-
----
+Expected: two `+PONG` responses.
 
 ## Benchmarking
-
-The server has been tested using Redis's `redis-benchmark` utility.
-
-Example:
 
 ```bash
 redis-benchmark -p 6379
 ```
 
-The benchmark sends multiple requests concurrently and measures the server's throughput and latency.
+Example workload: 100000 requests, 50 parallel clients, keep-alive enabled. The server handles benchmark workloads including `PING`, `SET`, `GET`, and `INCR`.
 
-Example workload:
-
-```text
-100000 requests
-50 parallel clients
-keep alive: 1
-```
-
-The server successfully handles benchmark workloads including:
-
-* `PING`
-* `SET`
-* `GET`
-* `INCR`
-
-This demonstrates that the server can process large numbers of requests across multiple concurrent TCP clients.
-
----
+`redis-benchmark` may issue commands not implemented here, so treat results as measurements of the supported workload, not a comparison with production Redis.
 
 ## Concurrency Model
 
 Each incoming client connection is handled by a separate `std::thread`.
 
-Conceptually:
-
-```text
+```
                     Server
                        |
               accept connection
@@ -323,169 +280,77 @@ Conceptually:
                  Shared Database
 ```
 
-Because multiple threads access the same `unordered_map`, database operations are synchronized using `std::shared_mutex`.
-
-Read operations can use shared locking, while write operations require exclusive access.
-
-This prevents concurrent clients from corrupting shared database state.
-
----
+Because multiple threads access the same `unordered_map`, operations are synchronized with `std::shared_mutex`: reads take a shared lock, writes take an exclusive lock.
 
 ## Persistence
 
-The database state is stored in:
+State is stored in `data/database.txt`. Records use a simple line-based format:
 
-```text
-database.txt
-```
+| Record | Meaning |
+|---|---|
+| `D` | Key-value data |
+| `E` | Expiration deadline for a key |
 
-The persistence layer provides functionality to:
+The persistence layer saves database state to disk and loads it when the server starts. Persisted operations include `SET`, `DEL`, `CLEAR`, `INCR`, `EXPIRE`, and `PERSIST`.
 
-* Save database state to disk
-* Load database state when the server starts
+### Known limitation
 
-Persistent operations include:
-
-* `SET`
-* `DEL`
-* `CLEAR`
-* `INCR`
-
-This allows data to survive a server restart.
-
----
+The file format is whitespace-delimited, so keys or values containing spaces work at runtime but may not be restored correctly after a restart. Escaping/length-prefixing is planned.
 
 ## Request Processing Flow
 
-A client request follows this path:
-
-```text
-Client
-  |
-  | TCP
-  v
-Server Socket
-  |
-  v
-read()
-  |
-  v
-RESP Parser
-  |
-  v
-Command Tokens
-  |
-  v
-Command Executor
-  |
-  v
-Database
-  |
-  v
-RESP Response
-  |
-  v
-write()
-  |
-  v
-Client
+```
+Client -> TCP -> Server Socket -> read() -> RESP Parser
+       -> Command Tokens -> Command Executor -> Database
+       -> RESP Response -> write() -> Client
 ```
 
-For example:
-
-```text
-SET counter 10
-```
-
-becomes:
-
-```text
-["SET", "counter", "10"]
-```
-
-The command executor then updates the in-memory database and returns a RESP-compatible success response.
-
----
+For example, `SET counter 10` becomes `["SET", "counter", "10"]`; the executor updates the in-memory database and returns a RESP success response.
 
 ## Design Decisions
 
-### Why POSIX sockets?
+**Why POSIX sockets?** Direct experience with `socket()`, `setsockopt()`, `bind()`, `listen()`, `accept()`, `read()`, and `write()`, with no framework hiding them.
 
-Using raw POSIX sockets provides direct experience with the fundamentals of TCP networking:
+**Why `std::thread`?** A thread per client is a simple concurrency model that lets multiple clients interact with the server simultaneously.
 
-* `socket()`
-* `setsockopt()`
-* `bind()`
-* `listen()`
-* `accept()`
-* `read()`
-* `write()`
+**Why `std::unordered_map`?** Redis relies on hash tables; `unordered_map` gives average O(1) lookup, insertion, and deletion.
 
-No networking framework hides these operations.
+**Why `std::shared_mutex`?** Allows concurrent reads while writes get exclusive access.
 
-### Why `std::thread`?
+**Why RESP?** It is the protocol Redis clients speak, which makes the server compatible with tools like `redis-cli` and `redis-benchmark`.
 
-A dedicated thread for each client provides a simple concurrency model and allows multiple clients to interact with the server simultaneously.
-
-### Why `std::unordered_map`?
-
-Redis relies heavily on hash-table-based data structures for efficient key-value access.
-
-`std::unordered_map` provides average **O(1)** lookup, insertion, and deletion.
-
-### Why `std::shared_mutex`?
-
-Multiple clients may access the database simultaneously.
-
-Shared locking allows concurrent reads while exclusive locking protects modifications.
-
-### Why RESP?
-
-RESP is the protocol used by Redis clients to communicate with Redis servers. Implementing RESP-style parsing makes the project more realistic and allows compatibility with Redis tooling such as `redis-benchmark`.
-
----
+**Why store absolute expiration deadlines?** A deadline remains meaningful across restarts, so the TTL countdown continues while the server is offline.
 
 ## Learning Outcomes
 
-This project provided hands-on experience with:
-
-* TCP/IP networking
-* POSIX socket programming
-* Client-server architecture
-* Concurrent programming
-* Thread synchronization
-* `std::thread`
-* `std::shared_mutex`
-* Hash-table based data structures
-* Protocol parsing
-* RESP serialization
-* File persistence
-* Linux systems programming
-* Performance benchmarking
-* Modular C++ project architecture
-* Debugging network protocols
-
----
+- TCP/IP networking and POSIX socket programming
+- Client-server architecture
+- Concurrent programming and thread synchronization
+- Hash-table-based data structures
+- Protocol parsing and RESP serialization
+- Key expiration and time-based state
+- File persistence
+- Linux systems programming
+- Performance benchmarking
+- Modular C++ project architecture
+- Debugging network protocols
 
 ## Future Improvements
 
-* [ ] TTL / `EXPIRE` command
-* [ ] LRU eviction policy
-* [ ] Background persistence thread
-* [ ] Multiple logical databases
-* [ ] Improved RESP protocol validation
-* [ ] Unit and integration tests
-* [ ] CMake support
-* [ ] Docker support
-* [ ] More Redis-compatible commands
-* [ ] Improved benchmark and performance analysis
-
----
+- [x] TTL / `EXPIRE` / `PERSIST` with persisted deadlines
+- [ ] Safe persistence encoding for keys/values with spaces
+- [ ] LRU eviction policy
+- [ ] Background persistence thread
+- [ ] Multiple logical databases
+- [ ] Improved RESP protocol validation
+- [ ] Unit and integration tests
+- [ ] CMake support
+- [ ] Docker support
+- [ ] More Redis-compatible commands
+- [ ] Improved benchmark and performance analysis
 
 ## Author
 
 **Yash Yadav**
-
 Engineering Student @ MNIT Jaipur
-
 Building backend and systems programming projects in C++.
